@@ -1,12 +1,10 @@
 import streamlit as st
 import pandas as pd
-import os
 
 # =====================================================================
 # 1. INTEGRATION: EXPLICIT ACCOUNT TYPE BREAKDOWN
 # =====================================================================
 def get_account_balances():
-    """Returns your exact real-world balances based on your inventory statements."""
     return {
         "Non-Reg": 273030.44,
         "RRSP": 258250.91,
@@ -39,32 +37,29 @@ def scale_oas(base_at_65, start_age):
         return base_at_65 * (1 + (months_late * 0.006))
 
 # =====================================================================
-# 3. TAX-AWARE ADVANCED SIMULATION ENGINE
+# 3. TAX-AWARE LIFETIME SIMULATION ENGINE (UP TO HER AGE 95)
 # =====================================================================
-def run_tax_aware_simulation(
+def run_lifetime_simulation(
     balances, base_bills, start_disc, gross_growth_rate,
     my_cpp_65, my_cpp_age, my_oas_65, my_oas_age,
     wife_stop_work_age, wife_work_base, wife_work_start_age, 
     wife_cpp_65, wife_cpp_age, wife_oas_65, wife_oas_age,
     gogo_years, slowgo_drop_pct, annual_surplus_savings,
-    rrsp_tax_rate_pct, non_reg_tax_drag_pct
+    rrsp_tax_rate_pct, non_reg_tax_drag_pct, total_sim_years
 ):
     my_start_age = 57
     wife_start_age = 47
     
-    # Extract structural buckets
-    non_reg = balances["Non-Reg"] + balances["Crypto"] # Liquid taxable mix
-    rrsp = balances["RRSP"] + balances["Direct-Reg"]    # Deferred mix
+    non_reg = balances["Non-Reg"] + balances["Crypto"]
+    rrsp = balances["RRSP"] + balances["Direct-Reg"]
     tfsa = balances["TFSA"]
     
-    # Pre-calculate pension streams
     my_annual_cpp = scale_cpp(my_cpp_65, my_cpp_age)
     my_annual_oas = scale_oas(my_oas_65, my_oas_age)
     wife_annual_work = wife_work_base
     wife_annual_cpp = scale_cpp(wife_cpp_65, wife_cpp_age)
     wife_annual_oas = scale_oas(wife_oas_65, wife_oas_age)
     
-    # Effective growth rates after internal annual tax friction
     rrsp_growth_rate = gross_growth_rate
     tfsa_growth_rate = gross_growth_rate
     non_reg_growth_rate = gross_growth_rate * (1 - (non_reg_tax_drag_pct / 100))
@@ -73,11 +68,11 @@ def run_tax_aware_simulation(
     total_raw_draws_needed = 0.0
     total_raw_savings_added = 0.0
     
-    for year in range(1, 19):
+    for year in range(1, total_sim_years + 1):
         my_age = my_start_age + year - 1
         wife_age = wife_start_age + year - 1
         
-        # 1. Determine spending target for the year (After-Tax cash desired)
+        # Spending Phase Logic (Go-Go drops to Slow-Go)
         if year <= gogo_years:
             target_after_tax_need = base_bills + start_disc
             phase_text = "Go-Go"
@@ -85,7 +80,6 @@ def run_tax_aware_simulation(
             target_after_tax_need = base_bills + (start_disc * (1 - (slowgo_drop_pct / 100)))
             phase_text = "Slow-Go"
             
-        # 2. Gather incoming taxable pension cash flows
         in_my_cpp = my_annual_cpp if my_age >= my_cpp_age else 0.0
         in_my_oas = my_annual_oas if my_age >= my_oas_age else 0.0
         in_wife_work = wife_annual_work if wife_age >= wife_work_start_age else 0.0
@@ -94,51 +88,41 @@ def run_tax_aware_simulation(
         
         total_pensions = in_my_cpp + in_my_oas + in_wife_work + in_wife_cpp + in_wife_oas
         
-        # 3. Compound the distinct accounts internally first
+        # Compound growth
         non_reg = non_reg * (1 + non_reg_growth_rate)
         rrsp = rrsp * (1 + rrsp_growth_rate)
         tfsa = tfsa * (1 + tfsa_growth_rate)
         
         wife_is_working = wife_age < wife_stop_work_age
         
-        # 4. Execute cash flow draws or structural contributions
         if wife_is_working:
-            # Active surplus added directly to your efficient Non-Reg account
             non_reg += annual_surplus_savings
             net_flow = annual_surplus_savings
             total_raw_savings_added += annual_surplus_savings
             status_text = "Working (Stacking Capital)"
         else:
-            # Calculate the net cash shortfall after pension income
             net_cash_shortfall = max(0.0, target_after_tax_need - total_pensions)
-            
-            # Execute systematic, tax-efficient drawdown sequence
             draw_remaining = net_cash_shortfall
             
-            # Sequence A: Draw from taxable Non-Reg first
+            # Draw Sequence
             draw_from_non_reg = min(draw_remaining, non_reg)
             non_reg -= draw_from_non_reg
             draw_remaining -= draw_from_non_reg
             
-            # Sequence B: Draw from RRSP next (Grossed up to cover the specified tax rate)
             if draw_remaining > 0 and rrsp > 0:
                 tax_multiplier = 1 / (1 - (rrsp_tax_rate_pct / 100))
                 gross_rrsp_draw_needed = draw_remaining * tax_multiplier
-                
                 actual_rrsp_draw = min(gross_rrsp_draw_needed, rrsp)
                 rrsp -= actual_rrsp_draw
-                # Net cash delivered to pocket after withholding tax
-                net_rrsp_delivered = actual_rrsp_draw * (1 - (rrsp_tax_rate_pct / 100))
-                draw_remaining -= net_rrsp_delivered
+                draw_remaining -= (actual_rrsp_draw * (1 - (rrsp_tax_rate_pct / 100)))
                 
-            # Sequence C: Draw from TFSA last as your ultimate tax-free defense shield
             draw_from_tfsa = min(draw_remaining, tfsa)
             tfsa -= draw_from_tfsa
             draw_remaining -= draw_from_tfsa
             
             net_flow = -net_cash_shortfall
             total_raw_draws_needed += net_cash_shortfall
-            status_text = f"Drawing Cash ({phase_text})"
+            status_text = f"Drawing Cash ({phase_text})" if net_cash_shortfall > 0 else "Pensions Covered Fully"
             
         total_combined_wealth = non_reg + rrsp + tfsa
         
@@ -172,8 +156,12 @@ st.markdown("---")
 st.sidebar.header("🎛️ Lifestyle & Go-Go Controls")
 base_expenses = st.sidebar.number_input(label="Annual Fixed Bills ($)", value=40000, step=1000)
 disc_expenses = st.sidebar.number_input(label="Initial Discretionary ($)", value=15000, step=1000)
-gogo_horizon = st.sidebar.slider(label="Go-Go Spending Horizon (Years)", min_value=1, max_value=18, value=10, step=1)
+gogo_horizon = st.sidebar.slider(label="Go-Go Spending Horizon (Years)", min_value=1, max_value=30, value=10, step=1)
 slowgo_reduction = st.sidebar.slider(label="Discretionary Drop in Slow-Go (%)", min_value=0, max_value=100, value=30, step=5)
+
+st.sidebar.markdown("---")
+st.sidebar.header("⏱️ Timeline Strategy Runway")
+horizon_years = st.sidebar.slider(label="Cockpit Simulation Length (Years)", min_value=18, max_value=48, value=38, step=1)
 
 st.sidebar.markdown("---")
 st.sidebar.header("💰 Active Surplus Accumulation")
@@ -207,7 +195,6 @@ wife_cpp_start_age = st.sidebar.slider("Age she takes her CPP", 60, 70, 65, 1)
 wife_oas_65_est = st.sidebar.number_input("Wife's Age 65 OAS Estimate ($/yr)", value=8916, step=100)
 wife_oas_start_age = st.sidebar.slider("Age she takes her OAS", 65, 70, 65, 1)
 
-# Fetch static object map of account components
 balances = get_account_balances()
 
 # =====================================================================
@@ -219,12 +206,12 @@ balances = get_account_balances()
     total_added_savings,
     projected_terminal_wealth,
     df_timeline
-) = run_tax_aware_simulation(
+) = run_lifetime_simulation(
     balances, base_expenses, disc_expenses, growth_rate,
     my_cpp_65_est, my_cpp_start_age, my_oas_65_est, my_oas_start_age,
     wife_stop_work_age, wife_work_est, wife_work_start_age, 
     wife_cpp_65_est, wife_cpp_start_age, wife_oas_65_est, wife_oas_start_age,
-    gogo_horizon, slowgo_reduction, annual_savings, rrsp_tax_draw, non_reg_tax_drag
+    gogo_horizon, slowgo_reduction, annual_savings, rrsp_tax_draw, non_reg_tax_drag, horizon_years
 )
 
 comfort_reserve_floor = (base_expenses + disc_expenses) * 10
@@ -251,22 +238,20 @@ with col3:
         st.caption("Active Savings Stacked")
 with col4:
     with st.container(border=True):
-        st.write("TAX-AWARE WEALTH YEAR 18")
+        st.write("TERMINAL WEALTH (CUSHION)")
         st.subheader(f"${projected_terminal_wealth:,.2f}")
-        st.caption(f"Net Ending Cushion @ {growth_rate_pct}%")
+        st.caption(f"End of Horizon Year Projection")
 
 st.markdown("---")
-st.subheader("🌉 Tax-Airtight Year-by-Year Freedom Horizon Matrix")
+st.subheader("🌉 Extended Lifetime Horizon Matrix")
 st.progress(household_score / 100.0)
 
 if reserve_cushion_delta >= 0:
-    st.success(f"🛡️ **10x COMFORT GUARDRAIL: PASSED** | Your net-of-tax Year 18 balance maintains a surplus of **+${reserve_cushion_delta:,.2f}** over your strict ${comfort_reserve_floor:,.2f} baseline floor.")
+    st.success(f"🛡️ **10x COMFORT GUARDRAIL: PASSED** | Your terminal balance maintains a surplus of **+${reserve_cushion_delta:,.2f}** over your strict ${comfort_reserve_floor:,.2f} backup floor.")
 else:
-    st.error(f"⚠️ **10x COMFORT GUARDRAIL: VIOLATED** | Tax friction and early draws pull your Year 18 net wealth down to **${abs(reserve_cushion_delta):,.2f}** below your safety threshold.")
+    st.error(f"⚠️ **10x COMFORT GUARDRAIL: BLOWN** | Terminal balance drops below safety floor by **-${abs(reserve_cushion_delta):,.2f}**.")
 
-st.markdown("### 📋 Granular Bucket-by-Bucket Ledger")
-st.caption("Watch how the individual account balances compound independently and draw down using a tax-optimized sequence:")
-
+st.markdown("### 📋 Lifetime Cash Flow Tracking Ledger")
 formatted_df = df_timeline.copy()
 for col in ["Target Net Need", "Pension Inflow", "Net Portfolio Flow", "Non-Reg Bal", "RRSP Bal", "TFSA Bal", "Total Ending Wealth"]:
     if col == "Net Portfolio Flow":
