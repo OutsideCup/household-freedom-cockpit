@@ -10,7 +10,7 @@ def get_live_portfolio_total():
     return 796576.07  # Matches your current master ledger total perfectly
 
 # =====================================================================
-# 2. UPDATED MATHEMATICAL ENGINES (WITH GROWTH ASSUMPTIONS)
+# 2. CORE MATHEMATICAL ENGINES (WITH COMPOUNDING & RESERVE CHECKS)
 # =====================================================================
 def calculate_perpetual_freedom_score(portfolio_value, base_expenses, disc_expenses, swr=0.035):
     """Calculates traditional freedom score based on SWR."""
@@ -49,12 +49,10 @@ def calculate_compounded_household_bridge(portfolio_value, total_annual_needs, y
     
     # Run Phase 1 Compounding
     for year in range(1, phase_1_duration + 1):
-        # Apply growth first, then subtract annual lifestyle draw
         current_balance = (current_balance * (1 + r)) - total_annual_needs
         
     # Run Phase 2 Compounding
     for year in range(1, phase_2_duration + 1):
-        # Apply growth first, then subtract net gap draw after your pension relief
         current_balance = (current_balance * (1 + r)) - p2_annual_gap
         
     terminal_wealth = max(0.0, current_balance)
@@ -129,6 +127,10 @@ daily_safe_income = safe_annual_income / 365
     portfolio_value, total_annual_needs, years_to_my_pension, years_to_wife_pension, my_annual_pension, wife_annual_pension, growth_rate
 )
 
+# 10x Living Expenses Reserve Core Math Guardrail
+comfort_reserve_floor = total_annual_needs * 10
+reserve_cushion_delta = projected_terminal_wealth - comfort_reserve_floor
+
 # =====================================================================
 # 5. RENDER PRIMARY METRIC CARDS
 # =====================================================================
@@ -164,10 +166,24 @@ with col4:
 st.markdown("---")
 
 # =====================================================================
-# 6. DETAILED TIMELINE BRIDGE ANALYSIS
+# 6. DETAILED TIMELINE BRIDGE ANALYSIS & 10X ALERTS
 # =====================================================================
 st.subheader("🌉 Dynamic Household Freedom Bridge Breakdown")
 st.progress(household_score / 100.0)
+
+# Render the 10x Living Expenses Rule Guardrail Alert Box
+if reserve_cushion_delta >= 0:
+    st.success(
+        f"🛡️ **10x LIVING EXPENSES COMFORT CHECK: PASSED**\n\n"
+        f"Your target 10x reserve floor is **${comfort_reserve_floor:,.2f}**. "
+        f"Your projected Year 18 wealth clears this baseline with a positive buffer of **+${reserve_cushion_delta:,.2f}** remaining untouched."
+    )
+else:
+    st.error(
+        f"⚠️ **10x LIVING EXPENSES COMFORT CHECK: UNDER RESIDUAL TARGET**\n\n"
+        f"To exit with a full 10x annual expense cash reserve (**${comfort_reserve_floor:,.2f}**) intact at Year 18, "
+        f"the current projection faces a residual buffer deficit of **${abs(reserve_cushion_delta):,.2f}** under these growth constraints."
+    )
 
 st.markdown("### 🗓️ Phase-by-Phase Capital Allocation")
 col_p1, col_p2 = st.columns(2)
@@ -191,12 +207,6 @@ with col_p2:
     else:
         st.success("No Phase 2 gap detected based on current timeline settings.")
 
-if household_score >= 100:
-    st.success(f"🟢 **SYSTEM STATUS: GO.** Your current portfolio fully covers the raw timeline liabilities. At an assumed growth rate of **{growth_rate_pct}%**, your assets will not deplete; instead, you are projected to cross the 18-year mark with **${projected_terminal_wealth:,.2f}** remaining intact.")
-else:
-    gap_dollar = total_escrow_needed - portfolio_value
-    st.error(f"🔴 **PORTFOLIO DEPLOYMENT GAP:** Your portfolio requires an additional **${gap_dollar:,.2f}** to completely secure her 18-year bridge timeline today.")
-
 # =====================================================================
 # 7. TRADITIONAL PERPETUAL COMPARISON (CONTEXT EXPANDER)
 # =====================================================================
@@ -206,9 +216,4 @@ with st.expander("📊 View Traditional Perpetual Retirement Comparison (SWR Bas
     st.progress(perpetual_score / 100.0)
     
     c1, c2 = st.columns(2)
-    with c1:
-        st.markdown(f"**Traditional SWR Score:** `{perpetual_score}%`")
-        st.markdown(f"**Safe Annual Influx Generated:** `${safe_annual_income:,.2f}/year`")
-    with c2:
-        bill_coverage_pct = min((safe_annual_income / base_expenses) * 100, 100.0)
-        st.markdown(f"**Fixed Bill Coverage Status:** `{bill_coverage_pct:.1f}%`")
+    with c1
