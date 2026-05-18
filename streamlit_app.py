@@ -153,4 +153,72 @@ with col2:
 
 with col3:
     with st.container(border=True):
-        st.write("TOTAL BRIDGE
+        st.write("TOTAL BRIDGE REQUIRED")
+        st.subheader(f"${total_escrow_needed:,.2f}")
+        st.caption("Zero-Growth Baseline Liability")
+
+with col4:
+    with st.container(border=True):
+        st.write("PROJECTED WEALTH AT YEAR 18")
+        st.subheader(f"${projected_terminal_wealth:,.2f}")
+        st.caption(f"Compounded at {growth_rate_pct}%")
+
+st.markdown("---")
+
+# =====================================================================
+# 6. DETAILED TIMELINE BRIDGE ANALYSIS & 10X ALERTS
+# =====================================================================
+st.subheader("🌉 Dynamic Household Freedom Bridge Breakdown")
+st.progress(household_score / 100.0)
+
+# Render the 10x Living Expenses Rule Guardrail Alert Box
+if reserve_cushion_delta >= 0:
+    st.success(
+        f"🛡️ **10x LIVING EXPENSES COMFORT CHECK: PASSED**\n\n"
+        f"Your target 10x reserve floor is **${comfort_reserve_floor:,.2f}**. "
+        f"Your projected Year 18 wealth clears this baseline with a positive buffer of **+${reserve_cushion_delta:,.2f}** remaining untouched."
+    )
+else:
+    st.error(
+        f"⚠️ **10x LIVING EXPENSES COMFORT CHECK: UNDER RESIDUAL TARGET**\n\n"
+        f"To exit with a full 10x annual expense cash reserve (**${comfort_reserve_floor:,.2f}**) intact at Year 18, "
+        f"the current projection faces a residual buffer deficit of **${abs(reserve_cushion_delta):,.2f}** under these growth constraints."
+    )
+
+st.markdown("### 🗓️ Phase-by-Phase Capital Allocation")
+col_p1, col_p2 = st.columns(2)
+
+with col_p1:
+    st.info(
+        f"**Phase 1: Immediate Total Freedom ({p1_dur} Years)**\n\n"
+        f"* **Household Status:** Both off, zero active pensions.\n"
+        f"* **Annual Portfolio Target:** `${total_annual_needs:,.2f}/yr`\n"
+        f"* **Total Phase Capital Spent:** `${p1_total:,.2f}`"
+    )
+
+with col_p2:
+    if p2_dur > 0:
+        st.warning(
+            f"**Phase 2: Partial Pension Relief ({p2_dur} Years)**\n\n"
+            f"* **Household Status:** Your pension live, wife bridging timeline.\n"
+            f"* **Annual Portfolio Target:** `${p2_ann:,.2f}/yr` (Net of your pension)\n"
+            f"* **Total Phase Capital Spent:** `${p2_total:,.2f}`"
+        )
+    else:
+        st.success("No Phase 2 gap detected based on current timeline settings.")
+
+# =====================================================================
+# 7. TRADITIONAL PERPETUAL COMPARISON (CONTEXT EXPANDER)
+# =====================================================================
+st.markdown("---")
+with st.expander("📊 View Traditional Perpetual Retirement Comparison (SWR Baseline)"):
+    st.caption("Tracks your portfolio assuming it had to sustain your lifestyle forever without any future pension cash flows.")
+    st.progress(perpetual_score / 100.0)
+    
+    c1, c2 = st.columns(2)
+    with col1:
+        st.markdown(f"**Traditional SWR Score:** `{perpetual_score}%`")
+        st.markdown(f"**Safe Annual Influx Generated:** `${safe_annual_income:,.2f}/year`")
+    with col2:
+        bill_coverage_pct = min((safe_annual_income / base_expenses) * 100, 100.0)
+        st.markdown(f"**Fixed Bill Coverage Status:** `{bill_coverage_pct:.1f}%`")
