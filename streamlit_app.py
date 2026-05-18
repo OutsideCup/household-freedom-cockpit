@@ -150,7 +150,7 @@ def run_lifetime_simulation(
 # 4. STREAMLIT UI DESIGN & SIDEBAR
 # =====================================================================
 st.set_page_config(layout="wide", page_title="Household Freedom Cockpit")
-st.title("Outside Cup // Household Freedom Cockpit")
+st.title("Household Freedom")
 st.markdown("---")
 
 st.sidebar.header("🎛️ Lifestyle & Go-Go Controls")
