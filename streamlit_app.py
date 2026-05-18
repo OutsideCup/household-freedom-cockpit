@@ -17,22 +17,22 @@ def scale_cpp(base_at_65, start_age):
         return base_at_65
     elif start_age < 65:
         months_early = (65 - start_age) * 12
-        reduction_pct = months_early * 0.006  # 0.6% per month
+        reduction_pct = months_early * 0.006
         return max(0.0, base_at_65 * (1 - reduction_pct))
     else:
         months_late = (start_age - 65) * 12
-        bonus_pct = months_late * 0.007  # 0.7% per month
+        bonus_pct = months_late * 0.007
         return base_at_65 * (1 + bonus_pct)
 
 def scale_oas(base_at_65, start_age):
     """Applies official CRA adjustments: No collection before 65, +0.6%/mo after 65."""
     if start_age < 65:
-        return 0.0  # Cannot collect OAS before 65
+        return 0.0
     elif start_age == 65:
         return base_at_65
     else:
         months_late = (start_age - 65) * 12
-        bonus_pct = months_late * 0.006  # 0.6% per month
+        bonus_pct = months_late * 0.006
         return base_at_65 * (1 + bonus_pct)
 
 # =====================================================================
@@ -41,18 +41,17 @@ def scale_oas(base_at_65, start_age):
 def run_granular_bridge_simulation(
     portfolio_start, base_bills, start_disc, growth_rate,
     my_cpp_65, my_cpp_age, my_oas_65, my_oas_age,
-    wife_work_base, wife_work_age, wife_cpp_65, wife_cpp_age, wife_oas_65, wife_oas_age,
+    wife_stop_work_age, wife_work_base, wife_work_start_age, 
+    wife_cpp_65, wife_cpp_age, wife_oas_65, wife_oas_age,
     gogo_years, slowgo_drop_pct
 ):
     # Current Ages in 2026
     my_start_age = 57
     wife_start_age = 47
     
-    # Calculate scaled values for life based on chosen start ages
+    # Pre-calculate scaled lifetime values for CPP/OAS
     my_annual_cpp = scale_cpp(my_cpp_65, my_cpp_age)
     my_annual_oas = scale_oas(my_oas_65, my_oas_age)
-    
-    wife_annual_work = wife_work_base  # Simplified fixed base for work pension
     wife_annual_cpp = scale_cpp(wife_cpp_65, wife_cpp_age)
     wife_annual_oas = scale_oas(wife_oas_65, wife_oas_age)
     
@@ -79,7 +78,8 @@ def run_granular_bridge_simulation(
         in_my_cpp = my_annual_cpp if my_age >= my_cpp_age else 0.0
         in_my_oas = my_annual_oas if my_age >= my_oas_age else 0.0
         
-        in_wife_work = wife_annual_work if wife_age >= wife_work_age else 0.0
+        # Untangled Logic: Only triggers pension if she hits her COLLECTION age
+        in_wife_work = wife_work_base if wife_age >= wife_work_start_age else 0.0
         in_wife_cpp = wife_annual_cpp if wife_age >= wife_cpp_age else 0.0
         in_wife_oas = wife_annual_oas if wife_age >= wife_oas_age else 0.0
         
@@ -114,10 +114,9 @@ def run_granular_bridge_simulation(
 # 4. STREAMLIT UI DESIGN & SIDEBAR
 # =====================================================================
 st.set_page_config(layout="wide", page_title="Household Freedom Cockpit")
-st.title("Household Freedom")
+st.title("Outside Cup // Household Freedom Cockpit")
 st.markdown("---")
 
-# Sidebar Column 1: Expenses & Growth
 st.sidebar.header("🎛️ Lifestyle & Go-Go Controls")
 base_expenses = st.sidebar.number_input(label="Annual Fixed Bills ($)", value=40000, step=1000)
 disc_expenses = st.sidebar.number_input(label="Initial Discretionary ($)", value=15000, step=1000)
@@ -129,7 +128,6 @@ st.sidebar.header("📈 Growth Engine")
 growth_rate_pct = st.sidebar.slider(label="Assumed Real Growth Rate (%)", min_value=0.0, max_value=8.0, value=4.0, step=0.25)
 growth_rate = growth_rate_pct / 100
 
-# Sidebar Column 2: Granular Canadian Pensions
 st.sidebar.markdown("---")
 st.sidebar.header("🇨🇦 Your Pension Settings")
 my_cpp_65_est = st.sidebar.number_input("Your Age 65 CPP Estimate ($/yr)", value=3000, step=500)
@@ -138,16 +136,17 @@ my_oas_65_est = st.sidebar.number_input("Your Age 65 OAS Estimate ($/yr)", value
 my_oas_start_age = st.sidebar.slider("Age to take your OAS", 65, 70, 65, 1)
 
 st.sidebar.markdown("---")
-st.sidebar.header("💃 Wife's Pension Settings")
-wife_work_est = st.sidebar.number_input("Wife's Workplace Pension ($/yr)", value=18000, step=1000)
-wife_work_start_age = st.sidebar.slider("Age she stops working / takes pension", 47, 65, 65, 1)
+st.sidebar.header("💃 Wife's Untangled Timeline")
+# Separate variables for employment exit vs asset cash flow activation
+wife_stop_work_age = st.sidebar.slider("Age she STOPS working", 47, 65, 65, 1)
+wife_work_est = st.sidebar.number_input("Wife's Workplace Pension Base ($/yr)", value=18000, step=1000)
+wife_work_start_age = st.sidebar.slider("Age she STARTS collecting workplace pension", 55, 65, 65, 1)
 
 wife_cpp_65_est = st.sidebar.number_input("Wife's Age 65 CPP Estimate ($/yr)", value=12000, step=500)
 wife_cpp_start_age = st.sidebar.slider("Age she takes her CPP", 60, 70, 65, 1)
 wife_oas_65_est = st.sidebar.number_input("Wife's Age 65 OAS Estimate ($/yr)", value=8916, step=100)
 wife_oas_start_age = st.sidebar.slider("Age she takes her OAS", 65, 70, 65, 1)
 
-# Execution Values
 portfolio_value = get_live_portfolio_total()
 
 # =====================================================================
@@ -165,11 +164,11 @@ portfolio_value = get_live_portfolio_total()
 ) = run_granular_bridge_simulation(
     portfolio_value, base_expenses, disc_expenses, growth_rate,
     my_cpp_65_est, my_cpp_start_age, my_oas_65_est, my_oas_start_age,
-    wife_work_est, wife_work_start_age, wife_cpp_65_est, wife_cpp_start_age, wife_oas_65_est, wife_oas_start_age,
+    wife_stop_work_age, wife_work_est, wife_work_start_age, 
+    wife_cpp_65_est, wife_cpp_start_age, wife_oas_65_est, wife_oas_start_age,
     gogo_horizon, slowgo_reduction
 )
 
-# 10x Guardrail calculation
 comfort_reserve_floor = (base_expenses + disc_expenses) * 10
 reserve_cushion_delta = projected_terminal_wealth - comfort_reserve_floor
 
@@ -207,7 +206,6 @@ if reserve_cushion_delta >= 0:
 else:
     st.error(f"⚠️ **10x COMFORT GUARDRAIL: VIOLATED** | Early exit conditions draw down your Year 18 wealth to **${abs(reserve_cushion_delta):,.2f}** below your preferred ${comfort_reserve_floor:,.2f} safety floor.")
 
-# Show Scaled Estimates Box
 with st.expander("🔍 View Live Scaled Payout Calculations (Based on Selected Ages)"):
     st.markdown(f"* **Your Calculated CPP Payout:** `${calculated_my_cpp:,.2f}/yr` (Age {my_cpp_start_age})")
     st.markdown(f"* **Your Calculated OAS Payout:** `${calculated_my_oas:,.2f}/yr` (Age {my_oas_start_age})")
