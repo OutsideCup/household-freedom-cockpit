@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import os
-import yfinance as yf
 
 # =====================================================================
 # 1. INTEGRATION: CONNECT TO YOUR MASTER PORTFOLIO BACKEND
@@ -10,94 +9,114 @@ def get_live_portfolio_total():
     return 796576.07  # Matches your current master ledger total perfectly
 
 # =====================================================================
-# 2. CORE MATHEMATICAL ENGINES (WITH COMPOUNDING & RESERVE CHECKS)
+# 2. ADVANCED YEAR-BY-YEAR SIMULATION ENGINE
 # =====================================================================
-def calculate_perpetual_freedom_score(portfolio_value, base_expenses, disc_expenses, swr=0.035):
-    """Calculates traditional freedom score based on SWR."""
-    safe_annual_income = portfolio_value * swr
-    if safe_annual_income < base_expenses:
-        score = (safe_annual_income / base_expenses) * 50
-    else:
-        base_score = 50
-        if disc_expenses > 0:
-            disc_coverage = ((safe_annual_income - base_expenses) / disc_expenses)
-            score = base_score + (min(disc_coverage, 1.0) * 50)
+def run_dynamic_household_simulation(
+    portfolio_start, base_bills, start_disc, growth_rate, 
+    my_pension_base, my_start_age, wife_pension_base, wife_start_age,
+    gogo_years, slowgo_drop_pct
+):
+    """
+    Runs a precise, year-by-year simulation over an 18-year horizon to capture:
+    1. 'Go-Go' spending reductions over time.
+    2. Exact pension start years based on customized target ages.
+    3. Year-by-year portfolio compounding and draws.
+    """
+    # Current Ages (Baseline 2026: You are 57, Wife is 47)
+    my_start_hours_age = 57
+    wife_start_hours_age = 47
+    
+    records = []
+    current_balance = portfolio_start
+    r = growth_rate
+    
+    total_raw_outflow_no_growth = 0
+    
+    # Run the simulation for exactly 18 years (until your wife reaches 65)
+    for year in range(1, 19):
+        my_current_age = my_start_hours_age + year - 1
+        wife_current_age = wife_start_hours_age + year - 1
+        
+        # Calculate Spending for the Year (Go-Go vs. Slow-Go logic)
+        if year <= gogo_years:
+            current_disc = start_disc
+            spending_phase = "Go-Go Phase"
         else:
-            score = 100.0
-    return round(score, 1), safe_annual_income
-
-def calculate_compounded_household_bridge(portfolio_value, total_annual_needs, y_me, y_wife, p_me, p_wife, annual_growth_rate):
-    """Calculates the time-horizon escrow required and projects actual terminal value with compounding growth."""
-    phase_1_duration = y_me
-    phase_2_duration = max(0, y_wife - y_me)
+            current_disc = start_disc * (1 - (slowgo_drop_pct / 100))
+            spending_phase = "Slow-Go Phase"
+            
+        annual_lifestyle_need = base_bills + current_disc
+        
+        # Calculate Active Inflows (Pensions) based on custom ages chosen
+        my_active_pension = my_pension_base if my_current_age >= my_start_age else 0.0
+        wife_active_pension = wife_pension_base if wife_current_age >= wife_start_age else 0.0
+        total_pension_inflow = my_active_pension + wife_active_pension
+        
+        # Net Portfolio Draw required
+        net_portfolio_draw = max(0.0, annual_lifestyle_need - total_pension_inflow)
+        total_raw_outflow_no_growth += net_portfolio_draw
+        
+        # Apply market growth first, then execute lifestyle drawdown
+        previous_balance = current_balance
+        current_balance = (current_balance * (1 + r)) - net_portfolio_draw
+        current_balance = max(0.0, current_balance)
+        
+        records.append({
+            "Year": year,
+            "Your Age": my_current_age,
+            "Wife's Age": wife_current_age,
+            "Phase": spending_phase,
+            "Lifestyle Need": annual_lifestyle_need,
+            "Pensions Inflow": total_pension_inflow,
+            "Net Portfolio Draw": net_portfolio_draw,
+            "Ending Balance": current_balance
+        })
+        
+    df_timeline = pd.DataFrame(records)
+    terminal_wealth = round(current_balance, 2)
     
-    # 1. Worst Case Zero-Growth Escrow (Your original safety anchor)
-    p1_raw_cost = phase_1_duration * total_annual_needs
-    p2_annual_gap = max(0, total_annual_needs - p_me)
-    p2_raw_cost = phase_2_duration * p2_annual_gap
-    total_bridge_needed = p1_raw_cost + p2_raw_cost
-    
-    # Calculate Household Health Score based on raw safety limit
-    if total_bridge_needed > 0:
-        score = min((portfolio_value / total_bridge_needed) * 100, 100.0)
+    # Calculate Household Health Score based on total raw baseline liability
+    if total_raw_outflow_no_growth > 0:
+        score = min((portfolio_start / total_raw_outflow_no_growth) * 100, 100.0)
     else:
         score = 100.0
-
-    # 2. Dynamic Compounding Projection Loop
-    current_balance = portfolio_value
-    r = annual_growth_rate
-    
-    # Run Phase 1 Compounding
-    for year in range(1, phase_1_duration + 1):
-        current_balance = (current_balance * (1 + r)) - total_annual_needs
         
-    # Run Phase 2 Compounding
-    for year in range(1, phase_2_duration + 1):
-        current_balance = (current_balance * (1 + r)) - p2_annual_gap
-        
-    terminal_wealth = max(0.0, current_balance)
-    
-    return (
-        round(score, 1), 
-        total_bridge_needed, 
-        p1_raw_cost, 
-        p2_raw_cost, 
-        phase_1_duration, 
-        phase_2_duration, 
-        p2_annual_gap,
-        round(terminal_wealth, 2)
-    )
+    return score, total_raw_outflow_no_growth, terminal_wealth, df_timeline
 
 # =====================================================================
-# 3. UI LAYOUT & CONTROL SIDEBAR
+# 3. UI LAYOUT & SIDEBAR CONTROLS
 # =====================================================================
 st.set_page_config(layout="wide", page_title="Household Freedom Cockpit")
 st.title("Outside Cup // Household Freedom Cockpit")
 st.markdown("---")
 
-st.sidebar.header("🎛️ Lifestyle & Expense Controls")
+# Section A: Lifestyle & Go-Go Adjustments
+st.sidebar.header("🎛️ Lifestyle & Go-Go Settings")
 base_expenses = st.sidebar.number_input(label="Annual Fixed Bills ($)", value=40000, step=1000)
-disc_expenses = st.sidebar.number_input(label="Annual Discretionary ($)", value=15000, step=1000)
-total_annual_needs = base_expenses + disc_expenses
+disc_expenses = st.sidebar.number_input(label="Initial Discretionary ($)", value=15000, step=1000)
 
+gogo_horizon = st.sidebar.slider(label="How many years of maximum 'Go-Go' spending?", min_value=1, max_value=18, value=10, step=1)
+slowgo_reduction = st.sidebar.slider(label="Slow-Go Discretionary Reduction (%)", min_value=0, max_value=100, value=30, step=5)
+
+# Section B: Portfolio Growth
 st.sidebar.markdown("---")
-st.sidebar.header("📈 Portfolio Performance Settings")
-growth_rate_pct = st.sidebar.slider(label="Assumed Annual Growth Rate (%)", min_value=0.0, max_value=8.0, value=4.0, step=0.25)
+st.sidebar.header("📈 Portfolio Performance")
+growth_rate_pct = st.sidebar.slider(label="Assumed Real Growth Rate (%)", min_value=0.0, max_value=8.0, value=4.0, step=0.25)
 growth_rate = growth_rate_pct / 100
 
+# Section C: Pension Timing Customization
 st.sidebar.markdown("---")
-st.sidebar.header("🧓 Pension Timeline Settings")
-years_to_my_pension = st.sidebar.number_input(label="Years until MY pension starts", value=8, step=1)
-years_to_wife_pension = st.sidebar.number_input(label="Years until WIFE's pension starts", value=18, step=1)
+st.sidebar.header("🧓 Pension Timing Customizer")
 
-my_annual_pension = st.sidebar.number_input(label="My Estimated Annual Pension ($)", value=35000, step=1000)
-wife_annual_pension = st.sidebar.number_input(label="Wife's Estimated Annual Pension ($)", value=25000, step=1000)
+st.sidebar.subheader("Your Pension Strategy")
+my_pension_age = st.sidebar.slider(label="Age to collect YOUR pension", min_value=60, max_value=70, value=65, step=1)
+my_annual_pension = st.sidebar.number_input(label="Estimated Annual Payout ($)", value=35000, step=1000)
 
-st.sidebar.markdown("---")
-st.sidebar.header("⚙️ SWR Model (Traditional)")
-swr_pct = st.sidebar.slider(label="Safe Withdrawal Rate (%)", min_value=3.0, max_value=5.0, value=3.5, step=0.05)
-swr = swr_pct / 100
+st.sidebar.subheader("Wife's Pension Strategy")
+wife_pension_age = st.sidebar.slider(label="Age to collect HER pension", min_value=60, max_value=70, value=65, step=1)
+wife_annual_pension = st.sidebar.number_input(label="Estimated Annual Payout ($)", value=25000, step=1000)
 
+# Section D: Simulation Mode
 st.sidebar.markdown("---")
 enable_simulation = st.sidebar.checkbox(label="Enable Simulation Mode", value=False)
 
@@ -109,26 +128,22 @@ else:
     st.sidebar.caption("⚡ Connected to Live Master Portfolio Data")
 
 # =====================================================================
-# 4. EXECUTE CALCULATIONS
+# 4. EXECUTE SIMULATION ENGINE
 # =====================================================================
-perpetual_score, safe_annual_income = calculate_perpetual_freedom_score(portfolio_value, base_expenses, disc_expenses, swr)
-daily_safe_income = safe_annual_income / 365
-
 (
     household_score, 
-    total_escrow_needed, 
-    p1_total, 
-    p2_total, 
-    p1_dur, 
-    p2_dur, 
-    p2_ann,
-    projected_terminal_wealth
-) = calculate_compounded_household_bridge(
-    portfolio_value, total_annual_needs, years_to_my_pension, years_to_wife_pension, my_annual_pension, wife_annual_pension, growth_rate
+    total_raw_bridge_needed, 
+    projected_terminal_wealth, 
+    df_timeline
+) = run_dynamic_household_simulation(
+    portfolio_value, base_expenses, disc_expenses, growth_rate,
+    my_annual_pension, my_pension_age, wife_annual_pension, wife_pension_age,
+    gogo_horizon, slowgo_reduction
 )
 
-# 10x Living Expenses Reserve Core Math Guardrail
-comfort_reserve_floor = total_annual_needs * 10
+# 10x Current Annual Lifestyle Need Safety Cap
+current_total_needs = base_expenses + disc_expenses
+comfort_reserve_floor = current_total_needs * 10
 reserve_cushion_delta = projected_terminal_wealth - comfort_reserve_floor
 
 # =====================================================================
@@ -143,7 +158,7 @@ with col1:
         if household_score >= 100:
             st.caption("🟢 Ready to Retire Both!")
         else:
-            st.caption(f"🔴 {100 - household_score:.1f}% to Bridge Target")
+            st.caption(f"🔴 {100 - household_score:.1f}% to Safety Cushion")
 
 with col2:
     with st.container(border=True):
@@ -153,9 +168,9 @@ with col2:
 
 with col3:
     with st.container(border=True):
-        st.write("TOTAL BRIDGE REQUIRED")
-        st.subheader(f"${total_escrow_needed:,.2f}")
-        st.caption("Zero-Growth Baseline Liability")
+        st.write("TOTAL NET DRAW REQ.")
+        st.subheader(f"${total_raw_bridge_needed:,.2f}")
+        st.caption("Sum of Out-of-Pocket Draws")
 
 with col4:
     with st.container(border=True):
@@ -166,59 +181,32 @@ with col4:
 st.markdown("---")
 
 # =====================================================================
-# 6. DETAILED TIMELINE BRIDGE ANALYSIS & 10X ALERTS
+# 6. RENDERING LIVE ALERTS & TIMELINE VISUALS
 # =====================================================================
-st.subheader("🌉 Dynamic Household Freedom Bridge Breakdown")
+st.subheader("🌉 Dynamic Year-by-Year Freedom Horizon Matrix")
 st.progress(household_score / 100.0)
 
-# Render the 10x Living Expenses Rule Guardrail Alert Box
 if reserve_cushion_delta >= 0:
     st.success(
         f"🛡️ **10x LIVING EXPENSES COMFORT CHECK: PASSED**\n\n"
-        f"Your target 10x reserve floor is **${comfort_reserve_floor:,.2f}**. "
-        f"Your projected Year 18 wealth clears this baseline with a positive buffer of **+${reserve_cushion_delta:,.2f}** remaining untouched."
+        f"Your baseline 10x comfort floor is **${comfort_reserve_floor:,.2f}**. "
+        f"Your projected wealth at Year 18 clears this baseline with an extra safety padding of **+${reserve_cushion_delta:,.2f}** completely untouched."
     )
 else:
     st.error(
-        f"⚠️ **10x LIVING EXPENSES COMFORT CHECK: UNDER RESIDUAL TARGET**\n\n"
-        f"To exit with a full 10x annual expense cash reserve (**${comfort_reserve_floor:,.2f}**) intact at Year 18, "
-        f"the current projection faces a residual buffer deficit of **${abs(reserve_cushion_delta):,.2f}** under these growth constraints."
+        f"⚠️ **10x LIVING EXPENSES COMFORT CHECK: BELOW TARGET**\n\n"
+        f"Under these exact pension timelines and growth constraints, your Year 18 reserve lands **${abs(reserve_cushion_delta):,.2f}** underneath your preferred 10x comfort floor."
     )
 
-st.markdown("### 🗓️ Phase-by-Phase Capital Allocation")
-col_p1, col_p2 = st.columns(2)
+# Display the granular Data Table cleanly so you can scan the path
+st.markdown("### 📋 Annual Cash Flow Tracking Ledger")
+st.caption("Scan exactly how your age, spending phases, and incoming pensions alter your portfolio balance every single year:")
 
-with col_p1:
-    st.info(
-        f"**Phase 1: Immediate Total Freedom ({p1_dur} Years)**\n\n"
-        f"* **Household Status:** Both off, zero active pensions.\n"
-        f"* **Annual Portfolio Target:** `${total_annual_needs:,.2f}/yr`\n"
-        f"* **Total Phase Capital Spent:** `${p1_total:,.2f}`"
-    )
+# Format table for high scan readability
+formatted_df = df_timeline.copy()
+formatted_df["Lifestyle Need"] = formatted_df["Lifestyle Need"].map("${:,.2f}".format)
+formatted_df["Pensions Inflow"] = formatted_df["Pensions Inflow"].map("${:,.2f}".format)
+formatted_df["Net Portfolio Draw"] = formatted_df["Net Portfolio Draw"].map("${:,.2f}".format)
+formatted_df["Ending Balance"] = formatted_df["Ending Balance"].map("${:,.2f}".format)
 
-with col_p2:
-    if p2_dur > 0:
-        st.warning(
-            f"**Phase 2: Partial Pension Relief ({p2_dur} Years)**\n\n"
-            f"* **Household Status:** Your pension live, wife bridging timeline.\n"
-            f"* **Annual Portfolio Target:** `${p2_ann:,.2f}/yr` (Net of your pension)\n"
-            f"* **Total Phase Capital Spent:** `${p2_total:,.2f}`"
-        )
-    else:
-        st.success("No Phase 2 gap detected based on current timeline settings.")
-
-# =====================================================================
-# 7. TRADITIONAL PERPETUAL COMPARISON (CONTEXT EXPANDER)
-# =====================================================================
-st.markdown("---")
-with st.expander("📊 View Traditional Perpetual Retirement Comparison (SWR Baseline)"):
-    st.caption("Tracks your portfolio assuming it had to sustain your lifestyle forever without any future pension cash flows.")
-    st.progress(perpetual_score / 100.0)
-    
-    c1, c2 = st.columns(2)
-    with col1:
-        st.markdown(f"**Traditional SWR Score:** `{perpetual_score}%`")
-        st.markdown(f"**Safe Annual Influx Generated:** `${safe_annual_income:,.2f}/year`")
-    with col2:
-        bill_coverage_pct = min((safe_annual_income / base_expenses) * 100, 100.0)
-        st.markdown(f"**Fixed Bill Coverage Status:** `{bill_coverage_pct:.1f}%`")
+st.dataframe(formatted_df, hide_index=True, use_container_width=True)
