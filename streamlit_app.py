@@ -43,7 +43,7 @@ def run_granular_bridge_simulation(
     my_cpp_65, my_cpp_age, my_oas_65, my_oas_age,
     wife_stop_work_age, wife_work_base, wife_work_start_age, 
     wife_cpp_65, wife_cpp_age, wife_oas_65, wife_oas_age,
-    gogo_years, slowgo_drop_pct
+    gogo_years, slowgo_drop_pct, annual_surplus_savings
 ):
     # Current Ages in 2026
     my_start_age = 57
@@ -58,6 +58,7 @@ def run_granular_bridge_simulation(
     records = []
     current_balance = portfolio_start
     total_raw_draws = 0.0
+    total_raw_savings_added = 0.0
     
     # Simulate 18 years out to clear the primary horizon
     for year in range(1, 19):
@@ -74,33 +75,44 @@ def run_granular_bridge_simulation(
             
         target_lifestyle_need = base_bills + current_disc
         
+        # Check active employment status
+        wife_is_working = wife_age < wife_stop_work_age
+        
         # Calculate Active Inflows this specific year
         in_my_cpp = my_annual_cpp if my_age >= my_cpp_age else 0.0
         in_my_oas = my_annual_oas if my_age >= my_oas_age else 0.0
         
-        # Untangled Logic: Only triggers pension if she hits her COLLECTION age
         in_wife_work = wife_work_base if wife_age >= wife_work_start_age else 0.0
         in_wife_cpp = wife_annual_cpp if wife_age >= wife_cpp_age else 0.0
         in_wife_oas = wife_annual_oas if wife_age >= wife_oas_age else 0.0
         
         total_pensions_this_year = in_my_cpp + in_my_oas + in_wife_work + in_wife_cpp + in_wife_oas
         
-        # Determine drawdown requirement
-        net_portfolio_draw = max(0.0, target_lifestyle_need - total_pensions_this_year)
+        # Dynamic cash flow mapping based on employment status
+        if wife_is_working:
+            net_portfolio_draw = 0.0
+            net_portfolio_deposit = annual_surplus_savings
+            status_text = "Active Work (Stacking Capital)"
+        else:
+            net_portfolio_draw = max(0.0, target_lifestyle_need - total_pensions_this_year)
+            net_portfolio_deposit = 0.0
+            status_text = f"Drawing from Portfolio ({phase_text})"
+            
         total_raw_draws += net_portfolio_draw
+        total_raw_savings_added += net_portfolio_deposit
         
-        # Compound portfolio
-        current_balance = (current_balance * (1 + growth_rate)) - net_portfolio_draw
+        # Compound portfolio logic: apply growth, add active savings surplus, subtract necessary draws
+        current_balance = (current_balance * (1 + growth_rate)) + net_portfolio_deposit - net_portfolio_draw
         current_balance = max(0.0, current_balance)
         
         records.append({
             "Year": year,
             "Your Age": my_age,
             "Wife's Age": wife_age,
-            "Spending Phase": phase_text,
+            "Status": status_text,
             "Target Lifestyle": target_lifestyle_need,
             "Pension Inflow": total_pensions_this_year,
-            "Net Portfolio Draw": net_portfolio_draw,
+            "Net Influx/Draw": net_portfolio_deposit if wife_is_working else -net_portfolio_draw,
             "Ending Wealth": current_balance
         })
         
@@ -108,7 +120,7 @@ def run_granular_bridge_simulation(
     terminal_wealth = round(current_balance, 2)
     health_score = min((portfolio_start / total_raw_draws) * 100, 100.0) if total_raw_draws > 0 else 100.0
     
-    return health_score, total_raw_draws, terminal_wealth, df_timeline, my_annual_cpp, my_annual_oas, wife_annual_cpp, wife_annual_oas
+    return health_score, total_raw_draws, total_raw_savings_added, terminal_wealth, df_timeline, my_annual_cpp, my_annual_oas, wife_annual_cpp, wife_annual_oas
 
 # =====================================================================
 # 4. STREAMLIT UI DESIGN & SIDEBAR
@@ -124,6 +136,10 @@ gogo_horizon = st.sidebar.slider(label="Go-Go Spending Horizon (Years)", min_val
 slowgo_reduction = st.sidebar.slider(label="Discretionary Drop in Slow-Go (%)", min_value=0, max_value=100, value=30, step=5)
 
 st.sidebar.markdown("---")
+st.sidebar.header("💰 Active Surplus Accumulation")
+annual_savings = st.sidebar.number_input(label="Annual Portfolio Addition from Work Excess ($/yr)", value=15000, step=1000)
+
+st.sidebar.markdown("---")
 st.sidebar.header("📈 Growth Engine")
 growth_rate_pct = st.sidebar.slider(label="Assumed Real Growth Rate (%)", min_value=0.0, max_value=8.0, value=4.0, step=0.25)
 growth_rate = growth_rate_pct / 100
@@ -137,7 +153,6 @@ my_oas_start_age = st.sidebar.slider("Age to take your OAS", 65, 70, 65, 1)
 
 st.sidebar.markdown("---")
 st.sidebar.header("💃 Wife's Untangled Timeline")
-# Separate variables for employment exit vs asset cash flow activation
 wife_stop_work_age = st.sidebar.slider("Age she STOPS working", 47, 65, 65, 1)
 wife_work_est = st.sidebar.number_input("Wife's Workplace Pension Base ($/yr)", value=18000, step=1000)
 wife_work_start_age = st.sidebar.slider("Age she STARTS collecting workplace pension", 55, 65, 65, 1)
@@ -155,6 +170,7 @@ portfolio_value = get_live_portfolio_total()
 (
     household_score,
     total_net_draws,
+    total_added_savings,
     projected_terminal_wealth,
     df_timeline,
     calculated_my_cpp,
@@ -166,7 +182,7 @@ portfolio_value = get_live_portfolio_total()
     my_cpp_65_est, my_cpp_start_age, my_oas_65_est, my_oas_start_age,
     wife_stop_work_age, wife_work_est, wife_work_start_age, 
     wife_cpp_65_est, wife_cpp_start_age, wife_oas_65_est, wife_oas_start_age,
-    gogo_horizon, slowgo_reduction
+    gogo_horizon, slowgo_reduction, annual_savings
 )
 
 comfort_reserve_floor = (base_expenses + disc_expenses) * 10
@@ -188,9 +204,9 @@ with col2:
         st.caption("Master Balance Baseline")
 with col3:
     with st.container(border=True):
-        st.write("TOTAL OUT-OF-POCKET DRAWS")
-        st.subheader(f"${total_net_draws:,.2f}")
-        st.caption("Net Capital Consumed")
+        st.write("TOTAL SURPLUS INVESTED")
+        st.subheader(f"${total_added_savings:,.2f}")
+        st.caption("Active Work Fuel Added")
 with col4:
     with st.container(border=True):
         st.write("PROJECTED WEALTH AT YEAR 18")
@@ -216,6 +232,10 @@ with st.expander("🔍 View Live Scaled Payout Calculations (Based on Selected A
 
 st.markdown("### 📋 Annual Cash Flow Tracking Ledger")
 formatted_df = df_timeline.copy()
-for col in ["Target Lifestyle", "Pension Inflow", "Net Portfolio Draw", "Ending Wealth"]:
-    formatted_df[col] = formatted_df[col].map("${:,.2f}".format)
+
+# Fix naming convention for the display table to fit influx/draw logic clearly
+formatted_df = formatted_df.rename(columns={"Net Influx/Draw": "Net Portfolio Flow"})
+
+for col in ["Target Lifestyle", "Pension Inflow", "Net Portfolio Flow", "Ending Wealth"]:
+    formatted_df[col] = formatted_df[col].map(lambda x: f"${x:,.2f}" if x >= 0 else f"-${abs(x):,.2f}")
 st.dataframe(formatted_df, hide_index=True, use_container_width=True)
