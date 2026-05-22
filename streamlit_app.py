@@ -5,7 +5,6 @@ import pandas as pd
 # 1. CORE MATHEMATICAL ENGINES
 # =====================================================================
 def calculate_perpetual_freedom_score(portfolio_value, base_expenses, disc_expenses, swr=0.035):
-    """Calculates traditional freedom score based on SWR."""
     safe_annual_income = portfolio_value * swr
     if safe_annual_income < base_expenses:
         score = (safe_annual_income / base_expenses) * 50
@@ -19,18 +18,37 @@ def calculate_perpetual_freedom_score(portfolio_value, base_expenses, disc_expen
     return round(score, 1), safe_annual_income
 
 def calculate_household_bridge(portfolio_value, total_annual_needs, y_me, y_wife, p_me, p_wife):
-    """Calculates time-horizon escrow required to bridge to pensions."""
     phase_1_duration = y_me
     phase_2_duration = max(0, y_wife - y_me)
     p1_total_cost = phase_1_duration * total_annual_needs
     p2_annual_needs = max(0, total_annual_needs - p_me)
     p2_total_cost = phase_2_duration * p2_annual_needs
     total_bridge_needed = p1_total_cost + p2_total_cost
-    if total_bridge_needed > 0:
-        score = min((portfolio_value / total_bridge_needed) * 100, 100.0)
-    else:
-        score = 100.0
+    score = min((portfolio_value / total_bridge_needed) * 100, 100.0) if total_bridge_needed > 0 else 100.0
     return (round(score, 1), total_bridge_needed, p1_total_cost, p2_total_cost, phase_1_duration, phase_2_duration, p2_annual_needs)
 
 # =====================================================================
-# 2. UI LAYOUT & CONTROL
+# 2. UI INITIALIZATION (Crucial: Must be first)
+# =====================================================================
+st.set_page_config(layout="wide", page_title="Household Freedom Cockpit")
+st.title("Outside Cup // Household Freedom Cockpit")
+st.markdown("---")
+
+# =====================================================================
+# 3. SIDEBAR CONTROLS
+# =====================================================================
+st.sidebar.header("🎛️ Lifestyle & Expense Controls")
+base_expenses = st.sidebar.number_input("Annual Fixed Bills ($)", value=45000, step=1000)
+disc_expenses = st.sidebar.number_input("Annual Discretionary ($)", value=25000, step=1000)
+total_annual_needs = base_expenses + disc_expenses
+
+st.sidebar.markdown("---")
+st.sidebar.header("🧓 Pension Timeline")
+y_me = st.sidebar.number_input("Years until MY pension", value=8, step=1)
+y_wife = st.sidebar.number_input("Years until WIFE's pension", value=18, step=1)
+p_me = st.sidebar.number_input("My Pension ($)", value=35000, step=1000)
+p_wife = st.sidebar.number_input("Wife's Pension ($)", value=25000, step=1000)
+
+st.sidebar.markdown("---")
+st.sidebar.header("📈 Portfolio Update")
+portfolio_value = st.sidebar.number_input("Enter Current Total ($)", value=811
