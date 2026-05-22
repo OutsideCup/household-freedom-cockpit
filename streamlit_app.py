@@ -47,30 +47,16 @@ p_me = st.sidebar.number_input("My Pension ($)", value=35000, step=1000)
 p_wife = st.sidebar.number_input("Wife's Pension ($)", value=25000, step=1000)
 
 st.sidebar.markdown("---")
+st.sidebar.header("⚙️ SWR Model")
+swr_pct = st.sidebar.slider("Safe Withdrawal Rate (%)", 3.0, 5.0, 3.5, 0.05)
+swr = swr_pct / 100
+
+st.sidebar.markdown("---")
 st.sidebar.header("📈 Portfolio Update")
-# This is the line that had the error: fixed with a clear closing parenthesis
 portfolio_value = st.sidebar.number_input("Enter Current Total ($)", value=811006.77, step=1000.0, format="%.2f")
 
 # =====================================================================
-# 3. CALCULATIONS & DISPLAY
+# 3. CALCULATIONS
 # =====================================================================
-perpetual_score, safe_annual_income = calculate_perpetual_freedom_score(portfolio_value, base_expenses, disc_expenses)
-(household_score, total_escrow, p1_t, p2_t, p1_d, p2_d, p2_ann) = calculate_household_bridge(portfolio_value, total_annual_needs, y_me, y_wife, p_me, p_wife)
-
-col1, col2, col3, col4 = st.columns(4)
-with col1:
-    with st.container(border=True):
-        st.write("HOUSEHOLD HEALTH SCORE")
-        st.subheader(f"{household_score}%")
-with col2:
-    with st.container(border=True):
-        st.write("CURRENT LIQUID ASSETS")
-        st.subheader(f"${portfolio_value:,.2f}")
-with col3:
-    with st.container(border=True):
-        st.write("TOTAL BRIDGE REQUIRED")
-        st.subheader(f"${total_escrow:,.2f}")
-with col4:
-    with st.container(border=True):
-        st.write("PASSIVE DAILY INFLUX")
-        st.subheader(f"${(safe_annual_income/365):,.2f}/day")
+perpetual_score, safe_annual_income = calculate_perpetual_freedom_score(portfolio_value, base_expenses, disc_expenses, swr)
+(household_score, total_escrow, p1_t, p2_t, p1_d, p2_d, p2_ann) = calculate_household_bridge(portfolio_value, total_annual_needs, y
