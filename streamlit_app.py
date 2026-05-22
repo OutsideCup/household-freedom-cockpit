@@ -28,15 +28,12 @@ def calculate_household_bridge(portfolio_value, total_annual_needs, y_me, y_wife
     return (round(score, 1), total_bridge_needed, p1_total_cost, p2_total_cost, phase_1_duration, phase_2_duration, p2_annual_needs)
 
 # =====================================================================
-# 2. UI INITIALIZATION (Crucial: Must be first)
+# 2. UI LAYOUT & SIDEBAR
 # =====================================================================
 st.set_page_config(layout="wide", page_title="Household Freedom Cockpit")
 st.title("Outside Cup // Household Freedom Cockpit")
 st.markdown("---")
 
-# =====================================================================
-# 3. SIDEBAR CONTROLS
-# =====================================================================
 st.sidebar.header("🎛️ Lifestyle & Expense Controls")
 base_expenses = st.sidebar.number_input("Annual Fixed Bills ($)", value=45000, step=1000)
 disc_expenses = st.sidebar.number_input("Annual Discretionary ($)", value=25000, step=1000)
@@ -51,4 +48,29 @@ p_wife = st.sidebar.number_input("Wife's Pension ($)", value=25000, step=1000)
 
 st.sidebar.markdown("---")
 st.sidebar.header("📈 Portfolio Update")
-portfolio_value = st.sidebar.number_input("Enter Current Total ($)", value=811
+# This is the line that had the error: fixed with a clear closing parenthesis
+portfolio_value = st.sidebar.number_input("Enter Current Total ($)", value=811006.77, step=1000.0, format="%.2f")
+
+# =====================================================================
+# 3. CALCULATIONS & DISPLAY
+# =====================================================================
+perpetual_score, safe_annual_income = calculate_perpetual_freedom_score(portfolio_value, base_expenses, disc_expenses)
+(household_score, total_escrow, p1_t, p2_t, p1_d, p2_d, p2_ann) = calculate_household_bridge(portfolio_value, total_annual_needs, y_me, y_wife, p_me, p_wife)
+
+col1, col2, col3, col4 = st.columns(4)
+with col1:
+    with st.container(border=True):
+        st.write("HOUSEHOLD HEALTH SCORE")
+        st.subheader(f"{household_score}%")
+with col2:
+    with st.container(border=True):
+        st.write("CURRENT LIQUID ASSETS")
+        st.subheader(f"${portfolio_value:,.2f}")
+with col3:
+    with st.container(border=True):
+        st.write("TOTAL BRIDGE REQUIRED")
+        st.subheader(f"${total_escrow:,.2f}")
+with col4:
+    with st.container(border=True):
+        st.write("PASSIVE DAILY INFLUX")
+        st.subheader(f"${(safe_annual_income/365):,.2f}/day")
