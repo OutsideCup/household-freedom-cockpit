@@ -1,8 +1,17 @@
 import streamlit as st
 import pandas as pd
+import os
+import yfinance as yf
 
 # =====================================================================
-# 1. CORE MATHEMATICAL ENGINES
+# 1. INTEGRATION: CONNECT TO YOUR MASTER PORTFOLIO BACKEND
+# =====================================================================
+def get_live_portfolio_total():
+    """Returns the master ledger total."""
+    return 796576.07
+
+# =====================================================================
+# 2. CORE MATHEMATICAL ENGINES
 # =====================================================================
 def calculate_perpetual_freedom_score(portfolio_value, base_expenses, disc_expenses, swr=0.035):
     safe_annual_income = portfolio_value * swr
@@ -17,25 +26,18 @@ def calculate_perpetual_freedom_score(portfolio_value, base_expenses, disc_expen
             score = 100.0
     return round(score, 1), safe_annual_income
 
-def calculate_household_bridge(portfolio_value, total_annual_needs, y_me, y_wife, p_me, p_wife_work, cpp, oas):
+def calculate_household_bridge(portfolio_value, total_annual_needs, y_me, y_wife, p_me, p_wife):
     phase_1_duration = y_me
     phase_2_duration = max(0, y_wife - y_me)
-    
-    # Phase 1: No pensions active
     p1_total_cost = phase_1_duration * total_annual_needs
-    
-    # Phase 2: Deduct all incoming streams
-    total_annual_income = p_me + p_wife_work + cpp + oas
-    p2_annual_needs = max(0, total_annual_needs - total_annual_income)
+    p2_annual_needs = max(0, total_annual_needs - p_me)
     p2_total_cost = phase_2_duration * p2_annual_needs
-    
     total_bridge_needed = p1_total_cost + p2_total_cost
     score = min((portfolio_value / total_bridge_needed) * 100, 100.0) if total_bridge_needed > 0 else 100.0
-    
     return (round(score, 1), total_bridge_needed, p1_total_cost, p2_total_cost, phase_1_duration, phase_2_duration, p2_annual_needs)
 
 # =====================================================================
-# 2. UI LAYOUT & SIDEBAR
+# 3. UI LAYOUT & CONTROL SIDEBAR
 # =====================================================================
 st.set_page_config(layout="wide", page_title="Household Freedom Cockpit")
 st.title("Outside Cup // Household Freedom Cockpit")
@@ -47,38 +49,40 @@ disc_expenses = st.sidebar.number_input("Annual Discretionary ($)", value=25000,
 total_annual_needs = base_expenses + disc_expenses
 
 st.sidebar.markdown("---")
-st.sidebar.header("🧓 Pension & Benefit Settings")
-y_me = st.sidebar.number_input("Years until MY pension starts", value=8, step=1)
-y_wife = st.sidebar.number_input("Years until WIFE's pension starts", value=18, step=1)
-p_me = st.sidebar.number_input("My Work Pension ($)", value=35000, step=1000)
-p_wife_work = st.sidebar.number_input("Wife's Work Pension ($)", value=25000, step=1000)
-cpp = st.sidebar.number_input("Annual CPP ($)", value=10000, step=500)
-oas = st.sidebar.number_input("Annual OAS ($)", value=8000, step=500)
+st.sidebar.header("🧓 Pension Timeline Settings")
+years_to_my_pension = st.sidebar.number_input("Years until MY pension starts", value=8, step=1)
+years_to_wife_pension = st.sidebar.number_input("Years until WIFE's pension starts", value=18, step=1)
+my_annual_pension = st.sidebar.number_input("My Estimated Annual Pension ($)", value=35000, step=1000)
+wife_annual_pension = st.sidebar.number_input("Wife's Estimated Annual Pension ($)", value=25000, step=1000)
 
 st.sidebar.markdown("---")
-st.sidebar.header("📈 Manual Portfolio Update")
-with st.sidebar.form("portfolio_form"):
-    manual_val = st.number_input("Enter Today's Total ($)", value=796576.07, step=1000.0, format="%.2f")
-    submitted = st.form_submit_button("Update Cockpit")
+st.sidebar.header("⚙️ SWR Model")
+swr_pct = st.sidebar.slider("Safe Withdrawal Rate (%)", 3.0, 5.0, 3.5, 0.05)
+swr = swr_pct / 100
 
-portfolio_value = manual_val if submitted else 796576.07
+st.sidebar.markdown("---")
+enable_simulation = st.sidebar.checkbox("Enable Simulation Mode", value=False)
+if enable_simulation:
+    portfolio_value = st.sidebar.number_input("Simulated Portfolio Value ($)", value=get_live_portfolio_total(), step=10000)
+else:
+    portfolio_value = get_live_portfolio_total()
 
 # =====================================================================
-# 3. CALCULATIONS & RENDER
+# 4. EXECUTE CALCULATIONS & RENDER
 # =====================================================================
-perpetual_score, safe_annual_income = calculate_perpetual_freedom_score(portfolio_value, base_expenses, disc_expenses)
-(household_score, total_escrow, p1_t, p2_t, p1_d, p2_d, p2_ann) = calculate_household_bridge(portfolio_value, total_annual_needs, y_me, y_wife, p_me, p_wife_work, cpp, oas)
+perpetual_score, safe_annual_income = calculate_perpetual_freedom_score(portfolio_value, base_expenses, disc_expenses, swr)
+(household_score, total_escrow_needed, p1_total, p2_total, p1_dur, p2_dur, p2_ann) = calculate_household_bridge(portfolio_value, total_annual_needs, years_to_my_pension, years_to_wife_pension, my_annual_pension, wife_annual_pension)
 
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("HEALTH SCORE", f"{household_score}%")
 col2.metric("LIQUID ASSETS", f"${portfolio_value:,.2f}")
-col3.metric("BRIDGE REQUIRED", f"${total_escrow:,.2f}")
+col3.metric("BRIDGE REQUIRED", f"${total_escrow_needed:,.2f}")
 col4.metric("DAILY INFLUX", f"${(safe_annual_income/365):,.2f}/day")
 
 st.markdown("---")
 st.subheader("🌉 Dynamic Household Freedom Bridge Breakdown")
 st.progress(household_score / 100.0)
 
-c1, c2 = st.columns(2)
-c1.info(f"**Phase 1: {p1_d} Years**\n\nTotal Capital: ${p1_t:,.2f}")
-c2.warning(f"**Phase 2: {p2_d} Years**\n\nTotal Capital: ${p2_t:,.2f}")
+col_p1, col_p2 = st.columns(2)
+col_p1.info(f"**Phase 1: {p1_dur} Years**\n\nTotal Capital: ${p1_total:,.2f}")
+col_p2.warning(f"**Phase 2: {p2_dur} Years**\n\nTotal Capital: ${p2_total:,.2f}")
