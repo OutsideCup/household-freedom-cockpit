@@ -1,67 +1,24 @@
 import streamlit as st
 import pandas as pd
 
-# 1. Setup Defaults
+# 1. HELPER FUNCTIONS
 def get_defaults():
-    return {"Non-Reg": 273030.44, "RRSP": 258250.91, "TFSA": 210667.74, "Direct-Reg": 49300.52, "Crypto": 4569.33}
-    
+    d = {"Non-Reg": 273030.44, "RRSP": 258250.91, "TFSA": 210667.74, "Direct-Reg": 49300.52, "Crypto": 4569.33}
+    d["Total"] = sum(d.values())
+    return d
+
 def scale_cpp(base, age):
     if age == 65: return base
-    if age < 65: return max(0.0, base * (1 - ((65 - age) * 12 * 0.006)))
-    return base * (1 + ((age - 65) * 12 * 0.007))
+    return max(0.0, base * (1 - ((65 - age) * 12 * 0.006))) if age < 65 else base * (1 + ((age - 65) * 12 * 0.007))
 
 def scale_oas(base, age):
-    if age < 65: return 0.0
-    if age == 65: return base
-    return base * (1 + ((age - 65) * 12 * 0.006))
-# 2. Simulation Logic
-def run_sim(bal, bills, disc, growth, yrs):
+    return 0.0 if age < 65 else (base if age == 65 else base * (1 + ((age - 65) * 12 * 0.006)))
+
+# 2. SIMULATION ENGINE
+def run_sim(bal, bills, disc, growth, tax_rrsp, tax_n, yrs, my_cpp, my_a, my_oas, my_oas_a, w_stop, w_work, w_start, w_cpp, w_cpp_a, w_oas, w_oas_a):
     n, r, t = bal["Non-Reg"] + bal["Crypto"], bal["RRSP"] + bal["Direct-Reg"], bal["TFSA"]
     recs = []
-    total_added = 0.0
-    
-    # 1. Define your pension inputs here (we will move these to UI sliders later)
-    m_cpp, m_age = 3000, 65
-    m_oas, m_oas_age = 8916, 65
-    
     for y in range(1, yrs + 1):
-        my_a = 57 + y - 1
-        
-        # 2. Calculate the inflow for this specific year
-        pensions = 0
-        if my_a >= m_age: pensions += scale_cpp(m_cpp, m_age)
-        if my_a >= m_oas_age: pensions += scale_oas(m_oas, m_oas_age)
-        
-        # Grow
-        n *= (1 + 0.04); r *= (1 + 0.04); t *= (1 + 0.04)
-        
-        # Add savings
-        n += 15000
-        total_added += 15000
-        
-        recs.append({"Year": y, "Pensions": pensions, "Total Wealth": round(n+r+t, 2)})
-        
-    return total_added, round(recs[-1]["Total Wealth"], 2), pd.DataFrame(recs)
-
-# 3. Render Dashboard
-st.set_page_config(layout="wide")
-st.title("Household Freedom")
-
-if 'bal' not in st.session_state:
-    st.session_state.bal = {**get_defaults(), "Total": sum(get_defaults().values())}
-
-with st.sidebar.form("update_form"):
-    st.header("Update Balances")
-    b = {k: st.number_input(k, value=st.session_state.bal.get(k, get_defaults()[k])) for k in get_defaults()}
-    if st.form_submit_button("Update"):
-        st.session_state.bal = {**b, "Total": sum(b.values())}
-
-added, term, df = run_sim(st.session_state.bal, 40000, 15000, 0.04, 38)
-
-c1, c2, c3 = st.columns(3)
-c1.metric("TOTAL ASSETS", f"${st.session_state.bal['Total']:,.2f}")
-c2.metric("TOTAL SAVED", f"${added:,.2f}")
-c3.metric("TERMINAL WEALTH", f"${term:,.2f}")
-
-st.subheader("Lifetime Projection")
-st.dataframe(df, use_container_width=True)
+        my_a_curr, w_a_curr = 57 + y - 1, 47 + y - 1
+        pens = (scale_cpp(my_cpp, my_a) if my_a_curr >= my_a else 0) + (scale_oas(my_oas, my_oas_a) if my_a_curr >= my_oas_a else 0) + (w_work if w_a_curr >= w_start else 0) + (scale_cpp(w_cpp, w_cpp_a) if w_a_curr >= w_cpp_a else 0) + (scale_oas(w_oas, w_oas_a) if w_a_curr >= w_oas_a else 0)
+        n *= (1 + (growth * (1 -
