@@ -19,13 +19,28 @@ def run_sim(bal, bills, disc, growth, yrs):
     n, r, t = bal["Non-Reg"] + bal["Crypto"], bal["RRSP"] + bal["Direct-Reg"], bal["TFSA"]
     recs = []
     total_added = 0.0
+    
+    # 1. Define your pension inputs here (we will move these to UI sliders later)
+    m_cpp, m_age = 3000, 65
+    m_oas, m_oas_age = 8916, 65
+    
     for y in range(1, yrs + 1):
-        # Apply growth
+        my_a = 57 + y - 1
+        
+        # 2. Calculate the inflow for this specific year
+        pensions = 0
+        if my_a >= m_age: pensions += scale_cpp(m_cpp, m_age)
+        if my_a >= m_oas_age: pensions += scale_oas(m_oas, m_oas_age)
+        
+        # Grow
         n *= (1 + 0.04); r *= (1 + 0.04); t *= (1 + 0.04)
-        # Simple Logic: Add savings
+        
+        # Add savings
         n += 15000
         total_added += 15000
-        recs.append({"Year": y, "Non-Reg": round(n, 2), "RRSP": round(r, 2), "TFSA": round(t, 2), "Total Wealth": round(n+r+t, 2)})
+        
+        recs.append({"Year": y, "Pensions": pensions, "Total Wealth": round(n+r+t, 2)})
+        
     return total_added, round(recs[-1]["Total Wealth"], 2), pd.DataFrame(recs)
 
 # 3. Render Dashboard
