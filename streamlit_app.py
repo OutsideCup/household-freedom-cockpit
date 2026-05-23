@@ -4,16 +4,24 @@ import pandas as pd
 # =====================================================================
 # 1. INTEGRATION: EXPLICIT ACCOUNT TYPE BREAKDOWN
 # =====================================================================
+st.sidebar.header("Update Current Balances")
+
+# Create the input fields in the sidebar
+n_reg = st.sidebar.number_input("Non-Reg", value=273030.44)
+rrsp  = st.sidebar.number_input("RRSP", value=258250.91)
+tfsa  = st.sidebar.number_input("TFSA", value=210667.74)
+d_reg = st.sidebar.number_input("Direct-Reg", value=49300.52)
+cryp  = st.sidebar.number_input("Crypto", value=4569.33)
+
 def get_account_balances():
     return {
-        "Non-Reg": 273030.44,
-        "RRSP": 258250.91,
-        "TFSA": 210667.74,
-        "Direct-Reg": 49300.52,
-        "Crypto": 4569.33,
-        "Total": 796576.07
+        "Non-Reg": n_reg,
+        "RRSP": rrsp,
+        "TFSA": tfsa,
+        "Direct-Reg": d_reg,
+        "Crypto": cryp,
+        "Total": n_reg + rrsp + tfsa + d_reg + cryp
     }
-
 # =====================================================================
 # 2. CANADIAN PENSION & TAX ADJUSTMENT ENGINES
 # =====================================================================
