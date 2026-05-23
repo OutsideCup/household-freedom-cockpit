@@ -4,7 +4,16 @@ import pandas as pd
 # 1. Setup Defaults
 def get_defaults():
     return {"Non-Reg": 273030.44, "RRSP": 258250.91, "TFSA": 210667.74, "Direct-Reg": 49300.52, "Crypto": 4569.33}
+    
+def scale_cpp(base, age):
+    if age == 65: return base
+    if age < 65: return max(0.0, base * (1 - ((65 - age) * 12 * 0.006)))
+    return base * (1 + ((age - 65) * 12 * 0.007))
 
+def scale_oas(base, age):
+    if age < 65: return 0.0
+    if age == 65: return base
+    return base * (1 + ((age - 65) * 12 * 0.006))
 # 2. Simulation Logic
 def run_sim(bal, bills, disc, growth, yrs):
     n, r, t = bal["Non-Reg"] + bal["Crypto"], bal["RRSP"] + bal["Direct-Reg"], bal["TFSA"]
