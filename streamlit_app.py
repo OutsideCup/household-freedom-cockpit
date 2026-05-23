@@ -65,12 +65,29 @@ w_work = st.sidebar.number_input("Wife's Pension ($)", value=18000)
 # (Add more as needed here, keeping it compact)
 
 # 4. RUN & RENDER
-# Updated line 68
+# UPDATE LINE 68 IN streamlit_app.py TO THIS:
 df = run_lifetime_simulation(
-    st.session_state.bal, 40000, 15000, 0.04, 
-    my_cpp, my_cpp_a, 8916, 65, 
-    65, w_work, 65, 12000, 65, 8916, 65, 
-    10, 30, 15000, 15, 15, 38
+    st.session_state.bal, # bal
+    40000,                # bills
+    15000,                # disc
+    0.04,                 # growth
+    my_cpp,               # my_cpp
+    my_cpp_a,             # my_a
+    8916,                 # my_oas (MISSING)
+    65,                   # my_oas_a (MISSING)
+    65,                   # w_stop
+    w_work,               # w_work
+    65,                   # w_start
+    12000,                # w_cpp
+    65,                   # w_cpp_a
+    8916,                 # w_oas
+    65,                   # w_oas_a
+    10,                   # gogo
+    30,                   # slowgo
+    15000,                # sav
+    15,                   # tx_r
+    15,                   # tx_n
+    38                    # yrs
 )
 
 st.metric("TERMINAL WEALTH", f"${df['Wealth'].iloc[-1]:,.2f}")
