@@ -10,7 +10,8 @@ def scale_oas(base, age):
     return 0.0 if age < 65 else (base if age == 65 else base * (1 + ((age - 65) * 12 * 0.006)))
 
 # 2. UPDATED SIMULATION ENGINE
-def run_lifetime_simulation(bal, bills, disc, growth, my_cpp, my_a, w_work, w_start, yrs):
+# UPDATE LINE 13 TO THIS:
+def run_lifetime_simulation(bal, bills, disc, growth, my_cpp, my_a, my_oas, my_oas_a, w_stop, w_work, w_start, w_cpp, w_cpp_a, w_oas, w_oas_a, gogo, slowgo, sav, tx_r, tx_n, yrs):
     n, r, t = bal["Non-Reg"] + bal["Crypto"], bal["RRSP"] + bal["Direct-Reg"], bal["TFSA"]
     recs = []
     
@@ -66,28 +67,29 @@ w_work = st.sidebar.number_input("Wife's Pension ($)", value=18000)
 
 # 4. RUN & RENDER
 # UPDATE LINE 68 IN streamlit_app.py TO THIS:
+# Use this call at the bottom of your code
 df = run_lifetime_simulation(
-    st.session_state.bal, # bal
-    40000,                # bills
-    15000,                # disc
-    0.04,                 # growth
-    my_cpp,               # my_cpp
-    my_cpp_a,             # my_a
-    8916,                 # my_oas (MISSING)
-    65,                   # my_oas_a (MISSING)
-    65,                   # w_stop
-    w_work,               # w_work
-    65,                   # w_start
-    12000,                # w_cpp
-    65,                   # w_cpp_a
-    8916,                 # w_oas
-    65,                   # w_oas_a
-    10,                   # gogo
-    30,                   # slowgo
-    15000,                # sav
-    15,                   # tx_r
-    15,                   # tx_n
-    38                    # yrs
+    st.session_state.bal, # 1: bal
+    40000,                # 2: bills
+    15000,                # 3: disc
+    0.04,                 # 4: growth
+    my_cpp,               # 5: my_cpp
+    my_cpp_a,             # 6: my_a
+    8916,                 # 7: my_oas
+    65,                   # 8: my_oas_a
+    65,                   # 9: w_stop
+    w_work,               # 10: w_work
+    65,                   # 11: w_start
+    12000,                # 12: w_cpp
+    65,                   # 13: w_cpp_a
+    8916,                 # 14: w_oas
+    65,                   # 15: w_oas_a
+    10,                   # 16: gogo
+    30,                   # 17: slowgo
+    15000,                # 18: sav
+    15,                   # 19: tx_r
+    15,                   # 20: tx_n
+    38                    # 21: yrs
 )
 
 st.metric("TERMINAL WEALTH", f"${df['Wealth'].iloc[-1]:,.2f}")
