@@ -65,7 +65,13 @@ w_work = st.sidebar.number_input("Wife's Pension ($)", value=18000)
 # (Add more as needed here, keeping it compact)
 
 # 4. RUN & RENDER
-df = run_lifetime_simulation(st.session_state.bal, 40000, 15000, 0.04, my_cpp, my_cpp_a, 8916, 65, 65, w_work, 65, 12000, 65, 8916, 65, 10, 30, 15000, 15, 15, 38)
+# Updated line 68
+df = run_lifetime_simulation(
+    st.session_state.bal, 40000, 15000, 0.04, 
+    my_cpp, my_cpp_a, 8916, 65, 
+    65, w_work, 65, 12000, 65, 8916, 65, 
+    10, 30, 15000, 15, 15, 38
+)
 
 st.metric("TERMINAL WEALTH", f"${df['Wealth'].iloc[-1]:,.2f}")
 st.dataframe(df, use_container_width=True)
