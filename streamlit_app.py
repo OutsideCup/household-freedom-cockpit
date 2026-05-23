@@ -1,88 +1,88 @@
 import streamlit as st
 import pandas as pd
-import os
-import yfinance as yf
 
 # =====================================================================
-# 1. INTEGRATION: CONNECT TO YOUR MASTER PORTFOLIO BACKEND
+# 1. INTEGRATION: MANUAL OVERRIDE ENGINE
 # =====================================================================
-def get_live_portfolio_total():
-    """Returns the master ledger total."""
-    return 796576.07
+def get_default_balances():
+    return {
+        "Non-Reg": 273030.44,
+        "RRSP": 258250.91,
+        "TFSA": 210667.74,
+        "Direct-Reg": 49300.52,
+        "Crypto": 4569.33
+    }
 
 # =====================================================================
-# 2. CORE MATHEMATICAL ENGINES
+# 2. CANADIAN PENSION & TAX ADJUSTMENT ENGINES
 # =====================================================================
-def calculate_perpetual_freedom_score(portfolio_value, base_expenses, disc_expenses, swr=0.035):
-    safe_annual_income = portfolio_value * swr
-    if safe_annual_income < base_expenses:
-        score = (safe_annual_income / base_expenses) * 50
+def scale_cpp(base_at_65, start_age):
+    if start_age == 65: return base_at_65
+    elif start_age < 65:
+        months_early = (65 - start_age) * 12
+        return max(0.0, base_at_65 * (1 - (months_early * 0.006)))
     else:
-        base_score = 50
-        if disc_expenses > 0:
-            disc_coverage = ((safe_annual_income - base_expenses) / disc_expenses)
-            score = base_score + (min(disc_coverage, 1.0) * 50)
+        months_late = (start_age - 65) * 12
+        return base_at_65 * (1 + (months_late * 0.007))
+
+def scale_oas(base_at_65, start_age):
+    if start_age < 65: return 0.0
+    elif start_age == 65: return base_at_65
+    else:
+        months_late = (start_age - 65) * 12
+        return base_at_65 * (1 + (months_late * 0.006))
+
+# =====================================================================
+# 3. TAX-AWARE LIFETIME SIMULATION ENGINE
+# =====================================================================
+def run_lifetime_simulation(balances, base_bills, start_disc, gross_growth_rate,
+    my_cpp_65, my_cpp_age, my_oas_65, my_oas_age,
+    wife_stop_work_age, wife_work_base, wife_work_start_age, 
+    wife_cpp_65, wife_cpp_age, wife_oas_65, wife_oas_age,
+    gogo_years, slowgo_drop_pct, annual_surplus_savings,
+    rrsp_tax_rate_pct, non_reg_tax_drag_pct, total_sim_years):
+    
+    my_start_age, wife_start_age = 57, 47
+    non_reg = balances["Non-Reg"] + balances["Crypto"]
+    rrsp = balances["RRSP"] + balances["Direct-Reg"]
+    tfsa = balances["TFSA"]
+    
+    my_annual_cpp, my_annual_oas = scale_cpp(my_cpp_65, my_cpp_age), scale_oas(my_oas_65, my_oas_age)
+    wife_annual_work, wife_annual_cpp, wife_annual_oas = wife_work_base, scale_cpp(wife_cpp_65, wife_cpp_age), scale_oas(wife_oas_65, wife_oas_age)
+    
+    rrsp_growth_rate, tfsa_growth_rate = gross_growth_rate, gross_growth_rate
+    non_reg_growth_rate = gross_growth_rate * (1 - (non_reg_tax_drag_pct / 100))
+    
+    records, total_raw_draws_needed, total_raw_savings_added = [], 0.0, 0.0
+    
+    for year in range(1, total_sim_years + 1):
+        my_age, wife_age = my_start_age + year - 1, wife_start_age + year - 1
+        target_after_tax_need = base_bills + (start_disc if year <= gogo_years else start_disc * (1 - (slowgo_drop_pct / 100)))
+        
+        total_pensions = (my_annual_cpp if my_age >= my_cpp_age else 0) + (my_annual_oas if my_age >= my_oas_age else 0) + \
+                         (wife_annual_work if wife_age >= wife_work_start_age else 0) + (wife_annual_cpp if wife_age >= wife_cpp_age else 0) + \
+                         (wife_annual_oas if wife_age >= wife_oas_age else 0)
+        
+        non_reg, rrsp, tfsa = non_reg * (1 + non_reg_growth_rate), rrsp * (1 + rrsp_growth_rate), tfsa * (1 + tfsa_growth_rate)
+        
+        if wife_age < wife_stop_work_age:
+            non_reg += annual_surplus_savings
+            net_flow, status_text = annual_surplus_savings, "Working (Stacking Capital)"
+            total_raw_savings_added += annual_surplus_savings
         else:
-            score = 100.0
-    return round(score, 1), safe_annual_income
-
-def calculate_household_bridge(portfolio_value, total_annual_needs, y_me, y_wife, p_me, p_wife):
-    phase_1_duration = y_me
-    phase_2_duration = max(0, y_wife - y_me)
-    p1_total_cost = phase_1_duration * total_annual_needs
-    p2_annual_needs = max(0, total_annual_needs - p_me)
-    p2_total_cost = phase_2_duration * p2_annual_needs
-    total_bridge_needed = p1_total_cost + p2_total_cost
-    score = min((portfolio_value / total_bridge_needed) * 100, 100.0) if total_bridge_needed > 0 else 100.0
-    return (round(score, 1), total_bridge_needed, p1_total_cost, p2_total_cost, phase_1_duration, phase_2_duration, p2_annual_needs)
-
-# =====================================================================
-# 3. UI LAYOUT & CONTROL SIDEBAR
-# =====================================================================
-st.set_page_config(layout="wide", page_title="Household Freedom Cockpit")
-st.title("Outside Cup // Household Freedom Cockpit")
-st.markdown("---")
-
-st.sidebar.header("🎛️ Lifestyle & Expense Controls")
-base_expenses = st.sidebar.number_input("Annual Fixed Bills ($)", value=45000, step=1000)
-disc_expenses = st.sidebar.number_input("Annual Discretionary ($)", value=25000, step=1000)
-total_annual_needs = base_expenses + disc_expenses
-
-st.sidebar.markdown("---")
-st.sidebar.header("🧓 Pension Timeline Settings")
-years_to_my_pension = st.sidebar.number_input("Years until MY pension starts", value=8, step=1)
-years_to_wife_pension = st.sidebar.number_input("Years until WIFE's pension starts", value=18, step=1)
-my_annual_pension = st.sidebar.number_input("My Estimated Annual Pension ($)", value=35000, step=1000)
-wife_annual_pension = st.sidebar.number_input("Wife's Estimated Annual Pension ($)", value=25000, step=1000)
-
-st.sidebar.markdown("---")
-st.sidebar.header("⚙️ SWR Model")
-swr_pct = st.sidebar.slider("Safe Withdrawal Rate (%)", 3.0, 5.0, 3.5, 0.05)
-swr = swr_pct / 100
-
-st.sidebar.markdown("---")
-enable_simulation = st.sidebar.checkbox("Enable Simulation Mode", value=False)
-if enable_simulation:
-    portfolio_value = st.sidebar.number_input("Simulated Portfolio Value ($)", value=get_live_portfolio_total(), step=10000)
-else:
-    portfolio_value = get_live_portfolio_total()
-
-# =====================================================================
-# 4. EXECUTE CALCULATIONS & RENDER
-# =====================================================================
-perpetual_score, safe_annual_income = calculate_perpetual_freedom_score(portfolio_value, base_expenses, disc_expenses, swr)
-(household_score, total_escrow_needed, p1_total, p2_total, p1_dur, p2_dur, p2_ann) = calculate_household_bridge(portfolio_value, total_annual_needs, years_to_my_pension, years_to_wife_pension, my_annual_pension, wife_annual_pension)
-
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("HEALTH SCORE", f"{household_score}%")
-col2.metric("LIQUID ASSETS", f"${portfolio_value:,.2f}")
-col3.metric("BRIDGE REQUIRED", f"${total_escrow_needed:,.2f}")
-col4.metric("DAILY INFLUX", f"${(safe_annual_income/365):,.2f}/day")
-
-st.markdown("---")
-st.subheader("🌉 Dynamic Household Freedom Bridge Breakdown")
-st.progress(household_score / 100.0)
-
-col_p1, col_p2 = st.columns(2)
-col_p1.info(f"**Phase 1: {p1_dur} Years**\n\nTotal Capital: ${p1_total:,.2f}")
-col_p2.warning(f"**Phase 2: {p2_dur} Years**\n\nTotal Capital: ${p2_total:,.2f}")
+            net_cash_shortfall = max(0.0, target_after_tax_need - total_pensions)
+            draw_rem = net_cash_shortfall
+            draw_non_reg = min(draw_rem, non_reg)
+            non_reg -= draw_non_reg
+            draw_rem -= draw_non_reg
+            if draw_rem > 0 and rrsp > 0:
+                gross_rrsp = min(draw_rem * (1 / (1 - (rrsp_tax_rate_pct / 100))), rrsp)
+                rrsp -= gross_rrsp
+                draw_rem -= (gross_rrsp * (1 - (rrsp_tax_rate_pct / 100)))
+            tfsa -= min(draw_rem, tfsa)
+            net_flow, status_text = -net_cash_shortfall, "Drawing Cash"
+            total_raw_draws_needed += net_cash_shortfall
+        
+        records.append({"Year": year, "Your Age": my_age, "Wife's Age": wife_age, "Status": status_text, "Target Net Need": target_after_tax_need, "Pension Inflow": total_pensions, "Net Portfolio Flow": net_flow, "Non-Reg Bal": non_reg, "RRSP Bal": rrsp, "TFSA Bal": tfsa, "Total Ending Wealth": (non_reg + rrsp + tfsa)})
+    
+    return min((sum(balances.values()) / total_raw_draws_needed) * 100, 100.0) if total_raw_
