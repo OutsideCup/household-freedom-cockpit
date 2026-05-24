@@ -7,7 +7,7 @@ import pandas as pd
 st.sidebar.header("Update Current Balances")
 
 # Create the input fields in the sidebar
-n_reg = st.sidebar.number_input("Non-Reg", value=273030.44)
+n_reg = st.sidebar.number_input("Non-Reg", value=280000.00)
 rrsp  = st.sidebar.number_input("RRSP", value=258250.91)
 tfsa  = st.sidebar.number_input("TFSA", value=210667.74)
 d_reg = st.sidebar.number_input("Direct-Reg", value=49300.52)
