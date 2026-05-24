@@ -8,10 +8,10 @@ st.sidebar.header("Update Current Balances")
 
 # Create the input fields in the sidebar
 n_reg = st.sidebar.number_input("Non-Reg", value=280000.00)
-rrsp  = st.sidebar.number_input("RRSP", value=258250.91)
-tfsa  = st.sidebar.number_input("TFSA", value=210667.74)
-d_reg = st.sidebar.number_input("Direct-Reg", value=49300.52)
-cryp  = st.sidebar.number_input("Crypto", value=4569.33)
+rrsp  = st.sidebar.number_input("RRSP", value=260000.00)
+tfsa  = st.sidebar.number_input("TFSA", value=210000.00)
+d_reg = st.sidebar.number_input("Direct-Reg", value=50000.00)
+cryp  = st.sidebar.number_input("Crypto", value=5000.00)
 
 def get_account_balances():
     return {
